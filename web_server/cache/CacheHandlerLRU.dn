@@ -6,13 +6,13 @@
 
 const char debugMSG[] = "[@CacheHandlerLRU]"
 
-const int MAX_SIZE = 100
+const int MAX_SIZE = 20
 
 component provides cache.CacheHandler requires io.Output out, data.IntUtil iu, time.Calendar ic, time.DateUtil dateCompare {
 
-	static CachedResponse cache[]
-	static int arraySize
-	static Mutex cacheLock = new Mutex()
+	CachedResponse cache[]
+	int arraySize
+	Mutex cacheLock = new Mutex()
 
 	CachedResponse CacheHandler:getCachedResponse(char resource[]) {
 

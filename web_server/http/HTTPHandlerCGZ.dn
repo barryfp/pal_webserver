@@ -64,8 +64,8 @@ component provides HTTPHandler requires io.Output out, data.IntUtil iu, io.FileS
 
 			newName = compress.compressResource(resource)
 			
-			if (newName != "") {
-				resource = new char[](newName)
+			if (newName.arrayLength != 0) {
+				resource = newName
 			}
 			
 			File fd = new File(resource, File.READ)
@@ -131,6 +131,7 @@ component provides HTTPHandler requires io.Output out, data.IntUtil iu, io.FileS
 			// TODO think about this
 			// if I could not cache content properly, what should I do?
 			// discard everything?
+			//out.println("add to cache as '$(ncr.resource)'")
 			if (cacheSuccess) ch.updateCache(ncr)
 			//out.println("[complete]");
 		} else {
@@ -177,6 +178,7 @@ component provides HTTPHandler requires io.Output out, data.IntUtil iu, io.FileS
 				CachedResponse cr
 
 				cacheVerifier = new char[](httpUtil.normalisePath(httpMessage.resource), compress.getExtension())
+				//out.println("check cache for '$(cacheVerifier)'")
 				cr = ch.getCachedResponse(cacheVerifier)
 
 				// if the compressed file is not there, see if the file is not compressed
@@ -185,6 +187,7 @@ component provides HTTPHandler requires io.Output out, data.IntUtil iu, io.FileS
 				}
 
 				if (cr != null && fileSystem.getInfo(cr.resource).modified == cr.resourceAge) {
+					//out.println("using cached response")
 					ss.socketBusy = true
 					s.send(cr.response)
 					ss.socketBusy = false

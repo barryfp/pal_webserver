@@ -43,6 +43,19 @@ component provides App requires io.Output out, pal.control.RestAPI, time.Timer t
 			}
 		}
 	
+	char[] getComponentForStart(char start[], char config[])
+		{
+		String parts[] = config.rsplit("|")
+		String comps[] = parts[0].string.explode(",")
+		for (int i = 0; i < comps.arrayLength; i++)
+			{
+			if (comps[i].string.find(start) != StringUtil.NOT_FOUND)
+				return comps[i].string
+			}
+		
+		return null
+		}
+	
 	int App:main(AppParam params[])
 		{
 		//connect to rest API of PAL and set config to index 0 (or any other index you like...)
@@ -51,52 +64,61 @@ component provides App requires io.Output out, pal.control.RestAPI, time.Timer t
 		String configs[] = restAPI.getConfigs()
 		
 		FileEntry workloads[] = fileSystem.getDirectoryContents("workloads")
+
+		for (int i = 0; i < configs.arrayLength; i++)
+			{
+			char shortName[] = getComponentForStart("HTTPHandler", configs[i].string)
+			out.println("config $i: '$shortName'")
+			}
 		
 		//test each option under each workload
 		for (int i = 0; i < workloads.arrayLength; i++)
 			{
-			out.println("testing 'workloads/$(workloads[i].name)'")
-			
-			ShutdownFlag sf = new ShutdownFlag()
-			File fd = new File("workloads/$(workloads[i].name)", File.READ)
-			String work[] = fd.read(fd.getSize()).explode("\r\n")
-			Thread t = asynch::workThread(work, sf)
-			
-			dec scores[] = new dec[configs.arrayLength]
-			
-			dec best = 10000.0
-			int bestIndex = 0
-			
-			for (int j = 0; j < configs.arrayLength; j++)
+			if (fileSystem.getInfo("workloads/$(workloads[i].name)").type == FileInfo.TYPE_FILE)
 				{
-				restAPI.setConfig(configs[j].string)
-				restAPI.getPerception()
-				timer.sleep(OBSERVATION_WINDOW_MS)
-				PerceptionData pdata = restAPI.getPerception()
+				out.println("testing 'workloads/$(workloads[i].name)'")
 				
-				dec vk = pdata.metrics[0].totalValue
-				dec vt = pdata.metrics[0].totalCount
-				dec avg = vk / vt
-				scores[j] = avg
+				ShutdownFlag sf = new ShutdownFlag()
+				File fd = new File("workloads/$(workloads[i].name)", File.READ)
+				String work[] = fd.read(fd.getSize()).explode("\r\n")
+				Thread t = asynch::workThread(work, sf)
 				
-				if (avg < best)
+				dec scores[] = new dec[configs.arrayLength]
+				
+				dec best = 10000.0
+				int bestIndex = 0
+				
+				for (int j = 0; j < configs.arrayLength; j++)
 					{
-					best = avg
-					bestIndex = j
+					restAPI.setConfig(configs[j].string)
+					restAPI.getPerception()
+					timer.sleep(OBSERVATION_WINDOW_MS)
+					PerceptionData pdata = restAPI.getPerception()
+					
+					dec vk = pdata.metrics[0].totalValue
+					dec vt = pdata.metrics[0].totalCount
+					dec avg = vk / vt
+					scores[j] = avg
+					
+					if (avg < best)
+						{
+						best = avg
+						bestIndex = j
+						}
 					}
+				
+				out.println("scores (lower is better, * is best):")
+				for (int j = 0; j < scores.arrayLength; j++)
+					{
+					if (j == bestIndex)
+						out.println(" - option $j: $(scores[j]) *")
+						else
+						out.println(" - option $j: $(scores[j])")
+					}
+				
+				sf.shutdown = true
+				t.join()
 				}
-			
-			out.println("scores (lower is better, * is best):")
-			for (int j = 0; j < scores.arrayLength; j++)
-				{
-				if (j == bestIndex)
-					out.println(" - option $j: $(scores[j]) *")
-					else
-					out.println(" - option $j: $(scores[j])")
-				}
-			
-			sf.shutdown = true
-			t.join()
 			}
 		
 		return 0
