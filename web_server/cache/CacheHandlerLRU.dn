@@ -75,7 +75,7 @@ component provides cache.CacheHandler requires io.Output out, data.IntUtil iu, t
 		return oldest(lfu)
 	}
 
-	void CacheHandler:updateCache(CachedResponse ncr) {
+	void CacheHandler:updateCache(store CachedResponse ncr) {
 	
 		mutex(cacheLock) {
 

@@ -33,7 +33,7 @@ component provides request.RequestHandler requires io.Output out, data.IntUtil i
 		}
 	}
 	
-	void RequestHandler:handleRequest(TCPSocket s) {
+	void RequestHandler:handleRequest(store TCPSocket s) {
 		asynch::processStream(s)
 	}
 }
