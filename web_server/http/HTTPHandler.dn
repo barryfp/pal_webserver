@@ -3,22 +3,32 @@ const char debugMSG[] = "[@HTTPHandler]"
 
 data SocketState{
 	TCPSocket socket
-	bool socketBusy
+	bool socketWaiting
 	bool keepAlive
-}
+	bool quit
+	}
+
+const int SLEEP_TIME = 100
+const int MAX_TIME = 5000
 
 component provides HTTPHandler requires io.Output out, data.IntUtil iu, io.FileSystem fileSystem, io.File,
 	time.Timer t, time.Calendar ic, cgi.CGI cgi, http.HTTPUtil httpUtil, pal.Perception perception {
 	
-	void startTimer(SocketState s, int sleep_time) {
-		t.sleep(sleep_time)
-		
-		if (s.socketBusy == false) {
-			s.socket.disconnect()
-			s.keepAlive = false
-		} else {
-			startTimer(s, sleep_time)
-		}
+	void startTimer(SocketState s, int sleep_time, int max_time) {
+		int time = 0
+
+		while (s.socketWaiting)
+			{
+			t.sleep(sleep_time)
+			time += sleep_time
+
+			if (time >= max_time)
+				{
+				s.socket.disconnect()
+				s.keepAlive = false
+				s.quit = true
+				}
+			}
 	}
 
 	HTTPMessage processRequest(SocketState s, int sleep_time, int num_req, HTTPMessage httpMessage) {
@@ -69,7 +79,6 @@ component provides HTTPHandler requires io.Output out, data.IntUtil iu, io.FileS
 			byte fbuf[]
 			int tl = 0
 			while ((fbuf = fd.read(2048)).arrayLength > 0) {
-				s.socketBusy = true
 				tl += fbuf.arrayLength
 				s.socket.send(fbuf)
 			}
@@ -77,7 +86,6 @@ component provides HTTPHandler requires io.Output out, data.IntUtil iu, io.FileS
 			returnMessage.contentLength = tl
 			returnMessage.status = 200
 
-			s.socketBusy = false
 			fd.close()
 		} else {
 			
@@ -97,16 +105,19 @@ component provides HTTPHandler requires io.Output out, data.IntUtil iu, io.FileS
 
 	void HTTPHandler:handleStream(TCPSocket s) {
 		int num_req = 0
-		int sleep_time = 5000
 		Event e
 		
-		SocketState ss = new SocketState(s, false, true)
+		SocketState ss = new SocketState(s)
+		ss.keepAlive = true
 
-		asynch::startTimer(ss, sleep_time)
-		
 		while (num_req < 100 && ss.keepAlive) {
 			
+			ss.socketWaiting = true
+			Thread thread = asynch::startTimer(ss, SLEEP_TIME, MAX_TIME)
 			HTTPMessage httpMessage = httpUtil.readHTTPRequest(s)
+			ss.socketWaiting = false
+			if (ss.quit) return
+			thread.join()
 		
 			// client closed connection
 			if (httpMessage != null) {
@@ -125,7 +136,7 @@ component provides HTTPHandler requires io.Output out, data.IntUtil iu, io.FileS
 				if ((httpMessage.command == "GET") ||
 					 (httpMessage.command == "POST")) {
 
-					httpMessage = processRequest(ss, sleep_time, num_req, httpMessage)
+					httpMessage = processRequest(ss, MAX_TIME, num_req, httpMessage)
 					if (httpMessage.status != 200) {
 						ss.keepAlive = false
 					}
